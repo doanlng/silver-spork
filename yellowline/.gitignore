@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+
+# Spark / Delta runtime artifacts
+checkpoints/
+/tmp/yellowline/
+metastore_db/
+derby.log
+spark-warehouse/
+
+# Data files (too large for git)
+data/raw/
+data/lookup/
+
+# IDE
+.idea/
+.vscode/
+*.iml

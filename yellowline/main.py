@@ -16,7 +16,7 @@ def main():
     print("[main] starting stream simulator...")
     simulator_thread = threading.Thread(
         target=simulate_stream,
-        daemon=True,   # dies automatically when main process exits
+        daemon=True,  # dies automatically when main process exits
     )
     simulator_thread.start()
 
@@ -25,12 +25,14 @@ def main():
     # Run one at a time while learning; combine once each layer is stable.
 
     # Milestone 1
-    from src.bronze.ingest import run as bronze_run
-    bronze_run()
+    # from src.bronze.ingest import run as bronze_run
+
+    # bronze_run()
 
     # Milestone 2 — uncomment when Bronze is working
-    # from src.silver.clean import run as silver_run
-    # silver_run()
+    from src.silver.clean import run as silver_run
+
+    silver_run()
 
     # Milestone 3 — uncomment when Silver is working
     # from src.gold.revenue import run as revenue_run

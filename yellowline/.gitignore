@@ -7,6 +7,9 @@ __pycache__/
 
 # Spark / Delta runtime artifacts
 checkpoints/
+data/input/
+data/output/
+data/checkpoints/
 /tmp/yellowline/
 metastore_db/
 derby.log

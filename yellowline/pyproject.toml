@@ -1,0 +1,15 @@
+[project]
+name = "yellowline"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "delta-spark==3.0.0",
+    "pandas>=2.0.0",
+    "pyspark==3.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+]

@@ -1,0 +1,11 @@
+[project]
+name = "notebook"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "delta>=0.4.2",
+    "ipykernel>=7.2.0",
+    "pyspark>=4.1.2",
+]

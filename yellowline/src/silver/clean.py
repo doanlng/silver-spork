@@ -26,9 +26,12 @@ Questions to answer before moving to Gold:
   - Why does dropDuplicates on a stream require a watermark?
 """
 
-from pyspark.sql import functions as F
+from pyspark.sql import SparkSession, DataFrame
+import pyspark.sql.functions as F
+from pyspark.sql.types import TimestampType
+from pyspark.sql.functions import col
 from utils.spark_session import get_spark
-from utils.schema import ZONE_SCHEMA
+from utils.schema import TRIP_SCHEMA, ZONE_SCHEMA
 from config import (
     BRONZE_PATH,
     SILVER_PATH,
@@ -39,40 +42,75 @@ from config import (
 )
 
 
-def load_zone_lookup(spark):
+def load_zone_lookup(spark: SparkSession) -> DataFrame:
     """
     Load the taxi zone lookup as a static DataFrame.
     This will be broadcast automatically in the stream-static join.
-    TODO: read ZONE_LOOKUP csv with ZONE_SCHEMA, return DataFrame.
     """
-    ...
+    return spark.read.format("csv").schema(ZONE_SCHEMA).load(ZONE_LOOKUP)
 
 
 def apply_quality_filters(df):
-    """
-    TODO: implement the three quality filters described above.
-    Return the filtered DataFrame.
-    """
-    ...
+
+    return (
+        df.withColumn(
+            "tpep_pickup_datetime", col("tpep_pickup_datetime").cast(TimestampType())
+        )
+        .withColumn(
+            "tpep_dropoff_datetime", col("tpep_dropoff_datetime").cast(TimestampType())
+        )
+        .filter(
+            (col("passenger_count") > 0)
+            & (col("fare_amount") > 0)
+            & ~((col("trip_distance") == 0) & (col("fare_amount") > 2))
+        )
+    )
 
 
 def enrich_with_zones(df, zone_df):
-    """
-    TODO: join df with zone_df twice —
-      once for pickup (PULocationID) and once for dropoff (DOLocationID).
-    Alias carefully to avoid column name collisions.
-    Return enriched DataFrame.
-    """
-    ...
+    pickup_zones = zone_df.select(
+        col("LocationID").alias("pu_location_id"),
+        col("Borough").alias("pickup_borough"),
+        col("Zone").alias("pickup_zone"),
+    )
+    dropoff_zones = zone_df.select(
+        col("LocationID").alias("do_location_id"),
+        col("Borough").alias("dropoff_borough"),
+        col("Zone").alias("dropoff_zone"),
+    )
+
+    return (
+        df.join(pickup_zones, df.PULocationID == pickup_zones.pu_location_id, "left")
+        .join(dropoff_zones, df.DOLocationID == dropoff_zones.do_location_id, "left")
+        .select(
+            "VendorID",
+            "tpep_pickup_datetime",
+            "tpep_dropoff_datetime",
+            "passenger_count",
+            "trip_distance",
+            "PULocationID",
+            "DOLocationID",
+            "pickup_borough",
+            "pickup_zone",
+            "dropoff_borough",
+            "dropoff_zone",
+            "fare_amount",
+            "tip_amount",
+            "total_amount",
+        )
+    )
 
 
 def add_derived_columns(df):
     """
-    TODO: add revenue_per_mile.
-    Hint: F.when(...).otherwise(...) handles the zero-distance case.
-    Return DataFrame with new column.
+    generates revenue per mile and adds that as a column
     """
-    ...
+    return df.withColumn(
+        "revenue_per_mile",
+        F.when(
+            col("trip_distance") != 0, col("total_amount") / col("trip_distance")
+        ).otherwise(None),
+    )
 
 
 def run():
@@ -80,15 +118,26 @@ def run():
 
     zone_df = load_zone_lookup(spark)
 
-    # TODO: read Bronze Delta as a stream
-    bronze_stream = ...
+    bronze_stream = (
+        spark.readStream.format("delta")
+        .option("maxFilesPerTrigger", 5)
+        .load(BRONZE_PATH)
+    )
 
-    # TODO: apply transforms in order
     # cast timestamps → filter → watermark → deduplicate → enrich → derive
-    silver_df = ...
+    enriched_cleaned = enrich_with_zones(apply_quality_filters(bronze_stream), zone_df)
+    silver_df = enriched_cleaned.withWatermark(
+        "tpep_pickup_datetime",
+        SILVER_WATERMARK,
+    ).dropDuplicatesWithinWatermark()
 
-    # TODO: write to Silver Delta
-    query = ...
+    query = (
+        silver_df.writeStream.format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", CKPT_SILVER)
+        .trigger(processingTime=TRIGGER_INTERVAL)
+        .start(SILVER_PATH)
+    )
 
     query.awaitTermination()
 

@@ -32,11 +32,21 @@ def run():
 
     # TODO: read stream from STREAM_INPUT
     # Hint: .readStream.schema(...).option("maxFilesPerTrigger", ...).json(...)
-    raw_stream = ...
+    raw_stream = (
+        spark.readStream.schema(TRIP_SCHEMA)
+        .option("maxFilesPerTrigger", MAX_FILES_PER_TRIGGER)
+        .json(STREAM_INPUT)
+    )
 
     # TODO: write to Delta at BRONZE_PATH
     # Remember: outputMode, checkpointLocation, trigger
-    query = ...
+    query = (
+        raw_stream.writeStream.format("delta")
+        .outputMode("append")
+        .option("checkpointLocation", CKPT_BRONZE)
+        .trigger(processingTime=TRIGGER_INTERVAL)
+        .start(BRONZE_PATH)
+    )
 
     query.awaitTermination()
 

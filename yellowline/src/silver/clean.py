@@ -22,8 +22,12 @@ What to implement:
 
 Questions to answer before moving to Gold:
   - What output mode are you using and why?
+        so we're using intermediate tables here to do some cleanings for hte streaming table but overtime we'll want to aggregate and not stress the system by doing it in one pass
+        we cant use update mode with duplicates because by dropping any duplicates we essentially tell the engine that this record at this time is the source of truth and drop everything else
   - What happens to the static zone DataFrame if the lookup CSV changes mid-run?
+        THe static zone dataframe stays in the same state as it is projected to each node executor while the stream runs.  This means that in order to change the state of the dataframe, we need to restart the stream
   - Why does dropDuplicates on a stream require a watermark?
+        The watermark will tell us how long the engine needs to hold onto intermediate state. If a watermark isn't specified, the engine holds on to intermediate state indefinitely effectly making computations complete as opposed to append. Duplicate data coming in outside the window will then be acknowledged as a different event
 """
 
 from pyspark.sql import SparkSession, DataFrame
@@ -63,6 +67,8 @@ def apply_quality_filters(df):
             (col("passenger_count") > 0)
             & (col("fare_amount") > 0)
             & ~((col("trip_distance") == 0) & (col("fare_amount") > 2))
+            & (col("PULocationID").isNotNull())
+            & (col("DOLocationID").isNotNull())
         )
     )
 

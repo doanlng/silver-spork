@@ -36,7 +36,7 @@ def run():
     spark = get_spark("YellowLine-Gold-Volume")
 
     # TODO: read Silver as a stream
-    silver_stream = ...
+    silver_stream = spark.readStream()
 
     # TODO: watermark → sliding window aggregation → write
     # Hint: window(col("pickup_ts"), "30 minutes", "15 minutes")

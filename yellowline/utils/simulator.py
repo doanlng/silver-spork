@@ -108,6 +108,7 @@ def simulate_stream(
             print(
                 f"[simulator] filled {missing_count:,} nulls in {col} with random zone IDs"
             )
+        df[col] = df[col].astype(int)
 
     total_batches = len(df) // batch_size
     print(

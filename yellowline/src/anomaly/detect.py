@@ -18,17 +18,27 @@ What to implement:
 
 Key questions before moving on:
   - Why must the foreachBatch function be idempotent?
-  - What does batch_id give you and how could you use it for exactly-once guarantees?
-  - Why can't you use outputMode("update") + Delta write directly here?
 
+        Spark guarantees at least once delivery for its execution in general.
+        but when it calls on foreachbatch, may re-execute the code within foreachbatch on an already processed batch
+        For records that never see completion, foreachbatch will run arbitrarily on the batch again which could be bad in the case of duplicate writes to external locations or storages that don't guarantee idempotency,
+        so the foreachbatch must be idempotent to mitigate the risk of duplicate data
+
+  - What does batch_id give you and how could you use it for exactly-once guarantees?
+
+    The batch_id gives a unique monotonically increasing id assignment to the micro-batch processed in the foreachbatch function.
+    spark can use this batch_id to see whether this batch has already been processed by the function in foreachbatch
+
+  - Why can't you use outputMode("update") + Delta write directly here?
+        Delta has no concept of update
 Note on statistics: computing stddev over a single micro-batch is a
 simplification — in production you'd maintain a rolling statistic.
 That's fine for this exercise; the point is the foreachBatch + MERGE pattern.
 """
 
 from delta.tables import DeltaTable
-from pyspark.sql import functions as F, DataFrame, col
-from pyspark.sql import SparkSession
+from pyspark.sql import functions as F, DataFrame, SparkSession
+from pyspark.sql.functions import col
 from utils.spark_session import get_spark
 from config import (
     SILVER_PATH,
@@ -63,6 +73,7 @@ def flag_anomalies(df: DataFrame) -> DataFrame:
     )
 
 
+# explicitly declare upsert logic
 def upsert_anomalies(micro_batch_df: DataFrame, batch_id: int) -> None:
     """
       1. Call flag_anomalies to get flagged rows

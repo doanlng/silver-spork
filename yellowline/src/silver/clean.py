@@ -67,6 +67,8 @@ def apply_quality_filters(df):
             (col("passenger_count") > 0)
             & (col("fare_amount") > 0)
             & ~((col("trip_distance") == 0) & (col("fare_amount") > 2))
+            & (col("PULocationID").isNotNull())
+            & (col("DOLocationID").isNotNull())
         )
     )
 

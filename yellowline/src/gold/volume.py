@@ -17,8 +17,16 @@ before your interview.
 
 Questions to answer before moving on:
   - How many windows does each trip appear in given these window settings?
+
+        each trip occurs in 2 windows
+        with a 30 minute window sliding every 15 minutes there are 15 minutes of overlap where events at that timestamp will appear in both windows
+
   - Why might this table be larger than the revenue Gold table?
+        because this window tumbles where the 30 minutes slides every 15, every distinct event contributes to 2 windows. the window that ends at that event, and the window that ends at t + 15 minutes
+
   - How would you use this table to build a real-time heatmap?
+        with color set as the volume by zone, let x axis be zone and y axis be even time window
+        this lets us see how traffic across each pickup_zone varies hour by hour
 """
 
 from pyspark.sql import functions as F, Window
@@ -38,7 +46,7 @@ def run():
 
     silver_stream = (
         spark.readStream.format("delta")
-        .option("maxFilesPerSchema", 5)
+        .option("maxFilesPerTrigger", 5)
         .load(SILVER_PATH)
     )
 
@@ -46,7 +54,7 @@ def run():
         silver_stream.withWatermark("tpep_pickup_datetime", GOLD_VOLUME_WATERMARK)
         .groupBy(
             F.window(
-                "tpep_pickup_datetime", "30 minutes", "5 minutes"
+                "tpep_pickup_datetime", "30 minutes", "15 minutes"
             ),  # sliding window
             "pickup_zone",
         )

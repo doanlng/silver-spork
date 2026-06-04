@@ -18,12 +18,18 @@ Design decisions you need to make (and be ready to defend):
 
 Questions to answer before moving on:
   - How many windows does a single trip appear in for a tumbling window?
+        1
+
   - When does a row appear in the output sink with Append mode?
+        a row appears in the sink after spark releases its state,
+        the state release occurs when the watermark (which is delayed behind the latest processing time) exceeds the end of the window that contains the event.
+
   - What would break if you used Complete mode on a 1-year history?
+        the watermark would break because complete mode relies on holding onto all the state for its complete computations, meaning it never releases state even behind by one year
+        there is a high risk of performance issues with millions of rows being shuffled and rewritten
 """
 
 from pyspark.sql import functions as F
-from utils.schema import SILVER_SCHEMA
 from utils.spark_session import get_spark
 from config import (
     SILVER_PATH,

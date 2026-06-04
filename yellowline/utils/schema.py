@@ -66,7 +66,20 @@ ZONE_SCHEMA = StructType(
 
 SILVER_SCHEMA = StructType(
     [
-        # TODO: fill in after you've decided which columns survive cleaning
-        # and what new derived columns you add (e.g. revenue_per_mile)
+        StructField("VendorID",              IntegerType(),   True),
+        StructField("tpep_pickup_datetime",  TimestampType(), True),
+        StructField("tpep_dropoff_datetime", TimestampType(), True),
+        StructField("passenger_count",       IntegerType(),   True),
+        StructField("trip_distance",         DoubleType(),    True),
+        StructField("PULocationID",          IntegerType(),   True),
+        StructField("DOLocationID",          IntegerType(),   True),
+        StructField("pickup_borough",        StringType(),    True),
+        StructField("pickup_zone",           StringType(),    True),
+        StructField("dropoff_borough",       StringType(),    True),
+        StructField("dropoff_zone",          StringType(),    True),
+        StructField("fare_amount",           DoubleType(),    True),
+        StructField("tip_amount",            DoubleType(),    True),
+        StructField("total_amount",          DoubleType(),    True),
+        StructField("revenue_per_mile",      DoubleType(),    True),
     ]
 )

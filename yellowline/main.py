@@ -41,13 +41,16 @@ def main(mode: str, limit_rows: int, batch_size: int):
         silver_run()
 
     # Milestone 3 — uncomment when Silver is working
-    if mode == "gold" or mode == "all":
-        from src.gold.revenue import run as revenue_run
+    if "gold-vol" in mode or mode == "all":
         from src.gold.volume import run as volume_run
 
-        revenue_run()
         volume_run()
 
+    if "gold-rev" in mode or mode == "all":
+        from src.gold.revenue import run as revenue_run
+
+        revenue_run()
+    #
     # Milestone 4 — uncomment when Silver is working
     if mode == "anomaly_detection" or mode == "all":
         from src.anomaly.detect import run as anomaly_run
@@ -80,7 +83,15 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--mode",
-        choices=["raw", "bronze", "silver", "gold", "all", "anomaly_detection"],
+        choices=[
+            "raw",
+            "bronze",
+            "silver",
+            "gold-rev",
+            "gold-vol",
+            "all",
+            "anomaly_detection",
+        ],
         help="choose which stream to start running, all to trigger all of them",
     )
 

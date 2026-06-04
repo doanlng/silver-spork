@@ -21,7 +21,7 @@ Questions to answer before moving on:
   - How would you use this table to build a real-time heatmap?
 """
 
-from pyspark.sql import functions as F
+from pyspark.sql import functions as F, Window
 from utils.spark_session import get_spark
 from config import (
     SILVER_PATH,
@@ -30,18 +30,35 @@ from config import (
     GOLD_VOLUME_WATERMARK,
     TRIGGER_INTERVAL,
 )
+from utils.schema import SILVER_SCHEMA
 
 
 def run():
     spark = get_spark("YellowLine-Gold-Volume")
 
-    # TODO: read Silver as a stream
-    silver_stream = ...
+    silver_stream = (
+        spark.readStream.format("delta")
+        .option("maxFilesPerSchema", 5)
+        .load(SILVER_PATH)
+    )
 
-    # TODO: watermark → sliding window aggregation → write
-    # Hint: window(col("pickup_ts"), "30 minutes", "15 minutes")
-    query = ...
+    volume_by_zone = (
+        silver_stream.withWatermark("tpep_pickup_datetime", GOLD_VOLUME_WATERMARK)
+        .groupBy(
+            F.window(
+                "tpep_pickup_datetime", "30 minutes", "5 minutes"
+            ),  # sliding window
+            "pickup_zone",
+        )
+        .agg(F.count("*").alias("trip_volume"))
+    )
 
+    query = (
+        volume_by_zone.writeStream.trigger(processingTime=TRIGGER_INTERVAL)
+        .option("checkpointLocation", CKPT_GOLD_VOL)
+        .outputMode("append")
+        .start(GOLD_VOLUME)
+    )
     query.awaitTermination()
 
 

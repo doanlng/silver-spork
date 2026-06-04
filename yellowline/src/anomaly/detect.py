@@ -27,7 +27,7 @@ That's fine for this exercise; the point is the foreachBatch + MERGE pattern.
 """
 
 from delta.tables import DeltaTable
-from pyspark.sql import functions as F, DataFrame
+from pyspark.sql import functions as F, DataFrame, col
 from pyspark.sql import SparkSession
 from utils.spark_session import get_spark
 from config import (
@@ -41,21 +41,30 @@ from config import (
 
 def flag_anomalies(df: DataFrame) -> DataFrame:
     """
-    TODO: given a batch DataFrame, compute per-borough fare stats
-    and return only the rows where fare_amount > mean + N*stddev.
-
     Steps:
       1. groupBy pickup_borough, compute mean(fare_amount) and stddev(fare_amount)
       2. join stats back to df
       3. filter where fare_amount > mean + threshold * stddev
       4. add a flagged_at timestamp column (F.current_timestamp())
     """
-    ...
+    fare_metrics = df.groupBy("pickup_borough").agg(
+        F.avg("fare_amount").alias("avg_fare"),
+        F.stddev("fare_amount").alias("stdev_fare"),
+    )
+
+    return (
+        df.withColumn("flagged_at", F.current_timestamp())
+        .join(fare_metrics, on="pickup_borough", how="left")
+        .filter(
+            col("fare_amount")
+            > col("avg_fare") + col("stdev_fare") * FARE_ANOMALY_STDDEV_THRESHOLD
+        )
+        .drop(col("avg_fare"), col("stdev_fare"))
+    )
 
 
 def upsert_anomalies(micro_batch_df: DataFrame, batch_id: int) -> None:
     """
-    TODO: foreachBatch handler.
       1. Call flag_anomalies to get flagged rows
       2. If no flagged rows, return early (nothing to upsert)
       3. Load or create the anomalies Delta table
@@ -66,20 +75,27 @@ def upsert_anomalies(micro_batch_df: DataFrame, batch_id: int) -> None:
     Hint: DeltaTable.forPath(spark, ANOMALIES_PATH) — but what if the
     table doesn't exist yet on the first batch? Handle that case.
     """
-    ...
+    spark = SparkSession.getActiveSession()
+    flagged_anomalies = flag_anomalies(micro_batch_df)
+    if spark and not flagged_anomalies.isEmpty():
+        if DeltaTable.isDeltaTable(spark, ANOMALIES_PATH):
+            DeltaTable.forPath(spark, ANOMALIES_PATH).alias("target").merge(
+                flagged_anomalies.alias("source"),
+                "target.tpep_pickup_datetime=source.tpep_pickup_datetime and target.tpep_dropoff_datetime=source.tpep_dropoff_datetime and target.vendor_id=source.vendor_id",
+            ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        else:
+            flagged_anomalies.write.format("delta").mode("append").save(ANOMALIES_PATH)
 
 
 def run():
     spark = get_spark("YellowLine-Anomaly")
 
-    silver_stream = ...  # TODO: read Silver as stream
+    silver_stream = spark.readStream.format("delta").load(SILVER_PATH)
 
     query = (
-        silver_stream
-        .writeStream
-        .foreachBatch(upsert_anomalies)
+        silver_stream.writeStream.foreachBatch(upsert_anomalies)
         .option("checkpointLocation", CKPT_ANOMALY)
-        # TODO: add trigger
+        .trigger(processingTime=TRIGGER_INTERVAL)
         .start()
     )
 

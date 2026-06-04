@@ -23,6 +23,7 @@ Questions to answer before moving on:
 """
 
 from pyspark.sql import functions as F
+from utils.schema import SILVER_SCHEMA
 from utils.spark_session import get_spark
 from config import (
     SILVER_PATH,
@@ -36,12 +37,25 @@ from config import (
 def run():
     spark = get_spark("YellowLine-Gold-Revenue")
 
-    # TODO: read Silver as a stream
-    silver_stream = ...
+    silver_stream = (
+        spark.readStream.format("delta")
+        .option("maxFilesPerTrigger", 5)
+        .load(SILVER_PATH)
+    )
 
-    # TODO: watermark → window aggregation → write
-    query = ...
+    hourly_borough_revenue = (
+        silver_stream.withWatermark("tpep_pickup_datetime", GOLD_REVENUE_WATERMARK)
+        .groupBy(F.window("tpep_pickup_datetime", "1 hour"), "pickup_borough")
+        .agg(F.sum("total_amount").alias("revenue_in_window"))
+    )
 
+    query = (
+        hourly_borough_revenue.writeStream.outputMode("append")
+        .trigger(processingTime=TRIGGER_INTERVAL)
+        .option("checkpointLocation", CKPT_GOLD_REV)
+        .outputMode("append")
+        .start(GOLD_REVENUE)
+    )
     query.awaitTermination()
 
 
